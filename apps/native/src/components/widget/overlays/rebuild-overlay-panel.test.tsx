@@ -165,10 +165,10 @@ describe("<RebuildOverlayPanel>", () => {
       systemUntouched: false,
     });
 
+    expect(screen.getByText("App Management is required to update managed app bundles")).toBeInTheDocument();
     expect(
-      screen.getByText("App Management is required to update managed app bundles"),
+      screen.getByText(/Privacy & Security → App Management/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Privacy & Security → App Management/)).toBeInTheDocument();
   });
 
   it("renders build-log-triggered notices while a rebuild is running", async () => {
