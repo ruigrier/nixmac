@@ -5,6 +5,7 @@ import { client } from "@/lib/orpc";
 import { getTelemetry } from "@/lib/telemetry/instance";
 import type { RebuildContext } from "@/types/rebuild";
 import { setRebuildRawLineEcho } from "@/viewmodel/rebuild";
+import { beginRebuildRetry } from "@/viewmodel/rebuild-retry";
 import { uiActions } from "@nixmac/state";
 import { useGitOperations } from "./use-git-operations";
 
@@ -14,6 +15,8 @@ interface RebuildOptions {
   storePath?: string;
   onSuccess?: () => Promise<void>;
   onFailure?: () => Promise<void>;
+  /** Recreate any preparation that failure cleanup undid before retrying. */
+  retry?: () => Promise<void>;
 }
 
 /**
@@ -29,16 +32,43 @@ export function useRebuildStream() {
   const { refreshGitStatus } = useGitOperations();
 
   const triggerRebuild = async (options: RebuildOptions) => {
+    const publishRetry = beginRebuildRetry();
+    let retry: (() => Promise<void>) | null = null;
+    if (options.context === "rollback") {
+      retry =
+        options.retry ??
+        (options.storePath
+          ? async () => {
+              uiActions.setProcessing(true, "cancel");
+              await triggerRebuild(options);
+            }
+          : null);
+    }
     uiActions.setRebuildContext(options.context);
     uiActions.setEtcClobber(null);
     // Store-path activation has no log summarizer; let the rebuild slice
     // echo raw output into the summary lines.
     setRebuildRawLineEcho(options.storePath != null);
 
-    const unlistenEnd = await ipcRenderer.on<DarwinApplyEndEvent>(
-      "darwin:apply:end",
-      async (event) => {
-        unlistenEnd();
+    const cleanUpFailure = async () => {
+      try {
+        await options.onFailure?.();
+        await refreshGitStatus();
+        publishRetry(retry);
+      } catch (e: unknown) {
+        // Preparation may still be active. Do not offer a replay until cleanup
+        // succeeds; report the failure instead of rejecting an event handler.
+        uiActions.setError((e as Error)?.message || String(e));
+      }
+    };
+
+    let ended = false;
+    let unlistenEnd: (() => void) | undefined;
+    try {
+      unlistenEnd = await ipcRenderer.on<DarwinApplyEndEvent>("darwin:apply:end", async (event) => {
+        if (ended) return;
+        ended = true;
+        unlistenEnd?.();
 
         // Stash the structured /etc clobber conflicts (if any) so the error
         // overlay can render the per-file list instead of only the flat string.
@@ -72,25 +102,24 @@ export function useRebuildStream() {
           if (options.context === "apply") {
             getTelemetry().captureEvent({ name: "apply_failed" });
           }
-          if (options.onFailure) {
-            await options.onFailure();
-          }
-          await refreshGitStatus();
+          await cleanUpFailure();
         }
-      },
-    );
+      });
 
-    try {
       if (options.storePath) {
         await client.darwin.activateStorePath({ storePath: options.storePath });
       } else {
         await client.darwin.applyStreamStart({ hostOverride: null });
       }
     } catch (e: unknown) {
+      // Some transports can emit an end event before rejecting the start call.
+      if (ended) return;
+      ended = true;
       const msg = (e as Error)?.message || String(e);
       uiActions.setError(msg);
       uiActions.setProcessing(false);
-      unlistenEnd();
+      unlistenEnd?.();
+      await cleanUpFailure();
     }
   };
 

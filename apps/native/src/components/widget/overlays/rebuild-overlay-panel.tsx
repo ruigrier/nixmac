@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { EtcClobberConflictList } from "@/components/widget/overlays/etc-clobber-conflict-list";
 import { useFixWithAi } from "@/hooks/use-fix-with-ai";
-import { useRebuildStream } from "@/hooks/use-rebuild-stream";
+import { retryLastRebuild, useCanRetryRebuild } from "@/viewmodel/rebuild-retry";
 import { useRollback } from "@/hooks/use-rollback";
 import { tauriAPI } from "@/ipc/api";
 import {
@@ -358,7 +358,7 @@ function RawConsoleOutput({ lines, children }: { lines: string[]; children?: Rea
 
 export function RebuildOverlayPanel() {
   const { handleRollback } = useRollback();
-  const { triggerRebuild } = useRebuildStream();
+  const canRetry = useCanRetryRebuild();
   const { fixWithAi } = useFixWithAi();
   const status = useViewModel((state) => state.rebuildStatus);
   const lines = useViewModel((state) => state.rebuildLog.lines);
@@ -378,8 +378,7 @@ export function RebuildOverlayPanel() {
   const systemSafetyMessage = getRebuildSystemSafetyMessage(systemUntouched, context);
 
   const handleRetry = async () => {
-    uiActions.setProcessing(true, "cancel");
-    await triggerRebuild({ context: "rollback" });
+    await retryLastRebuild();
   };
 
   const handleDismiss = () => {
@@ -408,12 +407,12 @@ export function RebuildOverlayPanel() {
     lines.length > 0
       ? lines
       : [
-        {
-          id: 0,
-          text: isRollback ? "Rolling back..." : "Starting rebuild...",
-          type: "info" as const,
-        },
-      ];
+          {
+            id: 0,
+            text: isRollback ? "Rolling back..." : "Starting rebuild...",
+            type: "info" as const,
+          },
+        ];
 
   // Step points to the current (most recent) line
   // - While running: last line is "in progress", previous lines are "completed"
@@ -539,7 +538,7 @@ export function RebuildOverlayPanel() {
                   onClick={isRollback ? handleRetry : () => handleRollback()}
                   size="sm"
                   // only implemented for rollback
-                  disabled={!isRollback}
+                  disabled={!isRollback || !canRetry || isRunning}
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
                   {isRollback ? "Retry Rollback" : "Rollback"}

@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { setRebuildRetry } from "@/viewmodel/rebuild-retry";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RebuildOverlayPanel } from "@/components/widget/overlays/rebuild-overlay-panel";
@@ -63,6 +64,7 @@ function makeEtcClobberResult(): EtcClobberCheckResult {
 
 function resetStores() {
   act(() => {
+    setRebuildRetry(null);
     viewModelActions.setState({
       rebuildStatus: null,
       rebuildLog: { lines: [], rawLines: [], notices: [] },
@@ -94,7 +96,7 @@ async function renderWithRebuildState(
   });
 
   const result = render(<RebuildOverlayPanel />);
-  await act(async () => { });
+  await act(async () => {});
   return result;
 }
 
@@ -102,6 +104,30 @@ describe("<RebuildOverlayPanel>", () => {
   beforeEach(resetStores);
 
   afterEach(resetStores);
+
+  it("enables retry only for a saved operation and consumes it on click", async () => {
+    await renderWithRebuildState({}, "rollback");
+    const retry = screen.getByRole("button", { name: "Retry Rollback" });
+    expect(retry).toBeDisabled();
+    const operation = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    act(() => setRebuildRetry(operation));
+    expect(retry).toBeEnabled();
+    await act(async () => {
+      fireEvent.click(retry);
+    });
+    expect(operation).toHaveBeenCalledTimes(1);
+    expect(retry).toBeDisabled();
+  });
+
+  it("keeps the apply-context Rollback button disabled even with a saved operation", async () => {
+    const operation = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    setRebuildRetry(operation);
+    await renderWithRebuildState({});
+    const rollback = screen.getByRole("button", { name: "Rollback" });
+    expect(rollback).toBeDisabled();
+    fireEvent.click(rollback);
+    expect(operation).not.toHaveBeenCalled();
+  });
 
   it("prominently reassures users when the backend says the failed apply left the system untouched", async () => {
     await renderWithRebuildState({ systemUntouched: true });
@@ -139,10 +165,10 @@ describe("<RebuildOverlayPanel>", () => {
       systemUntouched: false,
     });
 
-    expect(screen.getByText("App Management is required to update managed app bundles")).toBeInTheDocument();
     expect(
-      screen.getByText(/Privacy & Security → App Management/),
+      screen.getByText("App Management is required to update managed app bundles"),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Privacy & Security → App Management/)).toBeInTheDocument();
   });
 
   it("renders build-log-triggered notices while a rebuild is running", async () => {

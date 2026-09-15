@@ -1,3 +1,4 @@
+import { setRebuildRetry } from "@/viewmodel/rebuild-retry";
 import { uiActions, viewModelActions } from "@nixmac/state";
 import { useRebuildStream } from "@/hooks/use-rebuild-stream";
 import { getTelemetry } from "@/lib/telemetry/instance";
@@ -11,6 +12,7 @@ export function useRollback() {
   const { triggerRebuild } = useRebuildStream();
 
   const handleRollback = async () => {
+    setRebuildRetry(null);
     const wasCommittable = viewModelActions.getState().evolve?.committable === true;
 
     uiActions.setProcessing(true, "cancel");

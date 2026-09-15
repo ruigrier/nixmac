@@ -1,3 +1,4 @@
+import { retryLastRebuild, setRebuildRetry, useCanRetryRebuild } from "@/viewmodel/rebuild-retry";
 import type { AppManagementCheckResult, EtcClobberCheckResult } from "@/ipc/types";
 import { initialUiState, uiActions, useUiState } from "@nixmac/state";
 import { act, renderHook } from "@testing-library/react";
@@ -34,7 +35,9 @@ vi.mock("@/hooks/use-summary", () => ({
   }),
 }));
 
-function makeEtcClobberResult(overrides: Partial<EtcClobberCheckResult> = {}): EtcClobberCheckResult {
+function makeEtcClobberResult(
+  overrides: Partial<EtcClobberCheckResult> = {},
+): EtcClobberCheckResult {
   return {
     ok: false,
     checked: 1,
@@ -68,6 +71,7 @@ function makeAppManagementResult(
 describe("useApply", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setRebuildRetry(null);
     uiActions.setState({ ...initialUiState });
     mocks.checkEtcClobber.mockResolvedValue(makeEtcClobberResult({ ok: true, conflicts: [] }));
     mocks.checkAppManagement.mockResolvedValue(makeAppManagementResult());
@@ -160,15 +164,18 @@ describe("useApply", () => {
     });
 
     expect(mocks.triggerRebuild).toHaveBeenCalledTimes(1);
-    expect(mocks.triggerRebuild).toHaveBeenCalledWith(expect.objectContaining({ context: "apply" }));
+    expect(mocks.triggerRebuild).toHaveBeenCalledWith(
+      expect.objectContaining({ context: "apply" }),
+    );
   });
 
   it("prefetches the commit message without delaying activation", async () => {
     let resolveCommitMessage: (() => void) | undefined;
     mocks.generateCommitMessage.mockImplementation(
-      () => new Promise<void>((resolve) => {
-        resolveCommitMessage = resolve;
-      }),
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCommitMessage = resolve;
+        }),
     );
     const { result } = renderHook(() => useApply());
 
@@ -182,5 +189,31 @@ describe("useApply", () => {
       mocks.triggerRebuild.mock.invocationCallOrder[0],
     );
     resolveCommitMessage?.();
+  });
+  it("invalidates rollback retry before awaiting apply preflight", async () => {
+    let release!: (value: EtcClobberCheckResult) => void;
+    mocks.checkEtcClobber.mockReturnValueOnce(
+      new Promise<EtcClobberCheckResult>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const stale = vi.fn();
+    const { result } = renderHook(() => ({ ...useApply(), canRetry: useCanRetryRebuild() }));
+    act(() => {
+      setRebuildRetry(stale);
+    });
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.handleApply();
+    });
+    const availableDuringPreflight = result.current.canRetry;
+    await act(async () => {
+      await retryLastRebuild();
+      release(makeEtcClobberResult());
+      await pending;
+    });
+    expect(availableDuringPreflight).toBe(false);
+    expect(stale).not.toHaveBeenCalled();
+    expect(mocks.triggerRebuild).not.toHaveBeenCalled();
   });
 });

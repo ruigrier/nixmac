@@ -1,3 +1,4 @@
+import { setRebuildRetry } from "@/viewmodel/rebuild-retry";
 import { useRebuildStream } from "@/hooks/use-rebuild-stream";
 import type { HistoryItem } from "@/ipc/types";
 import { client } from "@/lib/orpc";
@@ -230,12 +231,14 @@ export function useHistoryRestore(
   }
 
   const doRestore = async (hash: string) => {
+    setRebuildRetry(null);
     setRestoringHash(hash);
     uiActions.setProcessing(true);
     try {
       await client.darwin.prepareRestore({ targetHash: hash });
       await triggerRebuild({
         context: "rollback",
+        retry: () => doRestore(hash),
         onSuccess: async () => {
           // The backend writes the git-state cell; `git_state_changed` mirrors it.
           await client.darwin.finalizeRestore({ targetHash: hash });

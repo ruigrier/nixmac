@@ -1,3 +1,4 @@
+import { setRebuildRetry } from "@/viewmodel/rebuild-retry";
 import { useRebuildStream } from "@/hooks/use-rebuild-stream";
 import { useSummary } from "@/hooks/use-summary";
 import type { AppManagementCheckResult } from "@/ipc/types";
@@ -32,7 +33,10 @@ async function hasEtcClobberConflicts(): Promise<boolean> {
 
 function appManagementPreflightMessage(result: AppManagementCheckResult): string {
   const appBundles = result.failures.map((failure) => failure.appBundle);
-  const listed = appBundles.slice(0, 3).map((path) => `- ${path}`).join("\n");
+  const listed = appBundles
+    .slice(0, 3)
+    .map((path) => `- ${path}`)
+    .join("\n");
   const extra = appBundles.length > 3 ? `\n- ${appBundles.length - 3} more` : "";
   return `App Management is required to update managed app bundles.\n\n${listed}${extra}\n\nOpen System Settings > Privacy & Security > App Management and enable nixmac, then retry.`;
 }
@@ -67,6 +71,7 @@ export function useApply() {
   const { generateCommitMessage } = useSummary();
 
   const handleApply = async () => {
+    setRebuildRetry(null);
     uiActions.setProcessing(true, "apply");
 
     // Warn about managed-file clobbers before prompting for admin rights. Hard

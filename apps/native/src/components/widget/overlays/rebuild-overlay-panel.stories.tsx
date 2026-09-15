@@ -10,10 +10,11 @@ import type {
 import { REBUILD_ERROR_CODES } from "@/lib/errors";
 import type { RebuildContext, RebuildLine, RebuildNotice } from "@/types/rebuild";
 import { makeRebuildStatus } from "@/utils/test-fixtures";
+import { setRebuildRetry } from "@/viewmodel/rebuild-retry";
 import { uiActions, viewModelActions } from "@nixmac/state";
 import type React from "react";
 import { useEffect } from "react";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 
 type RebuildOutcome = "idle" | "running" | "success" | "failure";
 type LinePreset = "starting" | "building" | "midBuild" | "completed" | "error" | "many" | "none";
@@ -149,8 +150,7 @@ function deriveStatus(args: RebuildOverlayPanelStoryArgs): RebuildStatus | null 
   }
 
   const isRunning = args.outcome === "running";
-  const success =
-    args.outcome === "running" ? null : args.outcome === "success" ? true : false;
+  const success = args.outcome === "running" ? null : args.outcome === "success" ? true : false;
 
   return makeRebuildStatus({
     isRunning,
@@ -164,6 +164,9 @@ function deriveStatus(args: RebuildOverlayPanelStoryArgs): RebuildStatus | null 
 
 function RebuildOverlayPanelStory(args: RebuildOverlayPanelStoryArgs) {
   useEffect(() => {
+    setRebuildRetry(
+      args.context === "rollback" && args.outcome === "failure" ? fn(async () => {}) : null,
+    );
     viewModelActions.setState({
       rebuildStatus: deriveStatus(args),
       rebuildLog: {
@@ -179,6 +182,7 @@ function RebuildOverlayPanelStory(args: RebuildOverlayPanelStoryArgs) {
     });
 
     return () => {
+      setRebuildRetry(null);
       viewModelActions.setState({
         rebuildStatus: null,
         rebuildLog: { lines: [], rawLines: [], notices: [] },
@@ -230,7 +234,10 @@ const meta = preview.meta({
     },
     rawLines: {
       control: "object",
-      ...cat("Rebuild log", "Raw console output; when empty the console falls back to structured lines."),
+      ...cat(
+        "Rebuild log",
+        "Raw console output; when empty the console falls back to structured lines.",
+      ),
     },
     notices: {
       control: "object",
