@@ -150,7 +150,8 @@ function deriveStatus(args: RebuildOverlayPanelStoryArgs): RebuildStatus | null 
   }
 
   const isRunning = args.outcome === "running";
-  const success = args.outcome === "running" ? null : args.outcome === "success" ? true : false;
+  const success =
+    args.outcome === "running" ? null : args.outcome === "success" ? true : false;
 
   return makeRebuildStatus({
     isRunning,
