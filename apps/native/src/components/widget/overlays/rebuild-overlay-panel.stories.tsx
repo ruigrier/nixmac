@@ -234,10 +234,7 @@ const meta = preview.meta({
     },
     rawLines: {
       control: "object",
-      ...cat(
-        "Rebuild log",
-        "Raw console output; when empty the console falls back to structured lines.",
-      ),
+      ...cat("Rebuild log", "Raw console output; when empty the console falls back to structured lines."),
     },
     notices: {
       control: "object",
