@@ -33,10 +33,7 @@ async function hasEtcClobberConflicts(): Promise<boolean> {
 
 function appManagementPreflightMessage(result: AppManagementCheckResult): string {
   const appBundles = result.failures.map((failure) => failure.appBundle);
-  const listed = appBundles
-    .slice(0, 3)
-    .map((path) => `- ${path}`)
-    .join("\n");
+  const listed = appBundles.slice(0, 3).map((path) => `- ${path}`).join("\n");
   const extra = appBundles.length > 3 ? `\n- ${appBundles.length - 3} more` : "";
   return `App Management is required to update managed app bundles.\n\n${listed}${extra}\n\nOpen System Settings > Privacy & Security > App Management and enable nixmac, then retry.`;
 }

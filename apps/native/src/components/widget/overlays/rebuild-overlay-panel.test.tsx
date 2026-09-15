@@ -96,7 +96,7 @@ async function renderWithRebuildState(
   });
 
   const result = render(<RebuildOverlayPanel />);
-  await act(async () => {});
+  await act(async () => { });
   return result;
 }
 

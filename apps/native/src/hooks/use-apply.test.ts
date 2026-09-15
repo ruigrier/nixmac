@@ -35,9 +35,7 @@ vi.mock("@/hooks/use-summary", () => ({
   }),
 }));
 
-function makeEtcClobberResult(
-  overrides: Partial<EtcClobberCheckResult> = {},
-): EtcClobberCheckResult {
+function makeEtcClobberResult(overrides: Partial<EtcClobberCheckResult> = {}): EtcClobberCheckResult {
   return {
     ok: false,
     checked: 1,
@@ -164,18 +162,15 @@ describe("useApply", () => {
     });
 
     expect(mocks.triggerRebuild).toHaveBeenCalledTimes(1);
-    expect(mocks.triggerRebuild).toHaveBeenCalledWith(
-      expect.objectContaining({ context: "apply" }),
-    );
+    expect(mocks.triggerRebuild).toHaveBeenCalledWith(expect.objectContaining({ context: "apply" }));
   });
 
   it("prefetches the commit message without delaying activation", async () => {
     let resolveCommitMessage: (() => void) | undefined;
     mocks.generateCommitMessage.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveCommitMessage = resolve;
-        }),
+      () => new Promise<void>((resolve) => {
+        resolveCommitMessage = resolve;
+      }),
     );
     const { result } = renderHook(() => useApply());
 

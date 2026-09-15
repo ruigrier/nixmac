@@ -407,12 +407,12 @@ export function RebuildOverlayPanel() {
     lines.length > 0
       ? lines
       : [
-          {
-            id: 0,
-            text: isRollback ? "Rolling back..." : "Starting rebuild...",
-            type: "info" as const,
-          },
-        ];
+        {
+          id: 0,
+          text: isRollback ? "Rolling back..." : "Starting rebuild...",
+          type: "info" as const,
+        },
+      ];
 
   // Step points to the current (most recent) line
   // - While running: last line is "in progress", previous lines are "completed"
